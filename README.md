@@ -7,7 +7,7 @@
 > over warehouse telemetry, runs an ABC-velocity slotting optimizer that
 > computes travel savings per move, plans pick waves against capacity, and
 > gates every wave release and large reslot plan behind human confirmation.
-> Proof: **64 tests green** (regression checks on synthetic data), a
+> Proof: **78 tests green** (regression checks on synthetic data), a
 > deterministic anchor (a 45-picks/day SKU stranded 180 m from the dock with a
 > net **15,052.8 m/day** travel saving after swapping out the dead stock in its
 > golden-zone slot), and a hash-chained audit log whose
@@ -106,7 +106,7 @@ Escalation tier: T2.
 Offline first (stdlib only, no dependencies):
 
 ```bash
-python -m pytest tests/ -q        # 64 tests
+python -m pytest tests/ -q        # 78 tests
 python - <<'EOF'
 from warehouse import telemetry, views, orchestrator
 conn = telemetry.connect(); views.bootstrap(conn, seed=42)
@@ -218,15 +218,32 @@ Test count (also checked by CI):
 
 <!-- run: python scripts/count_tests.py -->
 ```text
-64 tests collected
+78 tests collected
 ```
 <!-- /run -->
+
+### Authorizer template sync (2026-10-18)
+
+The SQLite authorizer was updated to the shared strict, view-aware version.
+A base-table read is allowed only when SQLite reports it on behalf of one of
+the allowed views (the authorizer's view-name argument). A read with no view
+name is denied. `sqlite_master` is always denied, even if listed, and so is
+`load_extension`. None of this repo's views hit the false denial, so the change is preventive here.
+`tests/test_authorizer_sync.py` drives the authorizer directly, independent
+of the text check. It covers comma joins and comment-obfuscated joins with a
+base table, every view, and view self-joins.
+
+Known residual: a read that uses no columns of a table behind a view is
+allowed, because SQLite reports the unused side of a view self-join the same
+way. So `SELECT count(*) FROM <that table>` or `EXISTS (SELECT 1 FROM ...)`
+can still reveal a row count, but no column data. Any column reference is
+denied.
 
 ## Built / Written-not-run / Planned
 
 | Status | Item |
 |---|---|
-| Built | Telemetry, views+gateway, 5 intents, SOP RAG, slotting optimizer, wave planner, carrier fake/live, orchestrator, tiers+gates, audit, PII-redacted feedback, Streamlit demo, 64 tests |
+| Built | Telemetry, views+gateway, 5 intents, SOP RAG, slotting optimizer, wave planner, carrier fake/live, orchestrator, tiers+gates, audit, PII-redacted feedback, Streamlit demo, 78 tests |
 | Built | CI on every push: ruff, tests, docs drift check, hashed brand check, gitleaks; CodeQL; Dependabot |
 | Planned | Live carrier feed wiring, weekly optimizer batch job, persisted confirmation gates, feedback-to-golden-case mining |
 

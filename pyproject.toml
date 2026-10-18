@@ -1,0 +1,13 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "warehouse-ops-agents"
+version = "0.1.0"
+description = "End-to-end ambient warehouse operations agent: slotting optimizer, wave planning, and governed telemetry Q&A"
+readme = "README.md"
+requires-python = ">=3.10"
+
+[tool.hatch.build.targets.wheel]
+packages = ["warehouse"]

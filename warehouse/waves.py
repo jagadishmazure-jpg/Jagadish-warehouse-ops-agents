@@ -37,7 +37,9 @@ def plan_waves(orders, wave_capacity=WAVE_CAPACITY_UNITS):
 
     waves = []
     seq = 0
-    for (zone_id, priority), members in sorted(groups.items()):
+    # Priority first, then zone: every P1 wave is numbered (and so released)
+    # before any P2 wave, whatever zone it is in.
+    for (zone_id, priority), members in sorted(groups.items(), key=lambda kv: (kv[0][1], kv[0][0])):
         # Pack greedily in priority order; a single order bigger than the
         # wave is its own wave (flagged over capacity).
         members.sort(key=lambda o: o["units"], reverse=True)

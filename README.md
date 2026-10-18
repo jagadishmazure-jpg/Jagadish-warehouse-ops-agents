@@ -7,9 +7,10 @@
 > over warehouse telemetry, runs an ABC-velocity slotting optimizer that
 > computes travel savings per move, plans pick waves against capacity, and
 > gates every wave release and large reslot plan behind human confirmation.
-> Proof: **52 tests green** (regression checks on synthetic data), a
+> Proof: **64 tests green** (regression checks on synthetic data), a
 > deterministic anchor (a 45-picks/day SKU stranded 180 m from the dock with a
-> computed **15,120 m/day** travel saving), and a hash-chained audit log whose
+> net **15,052.8 m/day** travel saving after swapping out the dead stock in its
+> golden-zone slot), and a hash-chained audit log whose
 > tamper detection is tested.
 
 **Purpose.** A portfolio showcase of agentic AI applied to warehouse
@@ -82,9 +83,12 @@ recs = slotting.recommend_moves(conn)
 
 ```python
 {'sku': 'SKU-FAST-01', 'sku_name': 'Widget Pro A', 'velocity_class': 'A',
- 'avg_daily_picks': 45.0, 'from_zone': 'Z-BACK', 'to_zone': 'Z-GOLD',
- 'saving_m_per_day': 15120.0, 'labor_hours': 0.5}
+ 'avg_daily_picks': 45.0, 'slot_id': 'SLOT-001', 'from_zone': 'Z-BACK',
+ 'to_zone': 'Z-GOLD', 'move_type': 'swap', 'swap_with': 'SKU-DEAD-07',
+ 'saving_m_per_day': 15052.8, 'labor_hours': 1.0}
 ```
+
+(The full run, re-checked by CI, is in the review section below.)
 
 Planner answer to "Which SKUs are mis-slotted?":
 
@@ -102,7 +106,7 @@ Escalation tier: T2.
 Offline first (stdlib only, no dependencies):
 
 ```bash
-python -m pytest tests/ -q        # 52 tests
+python -m pytest tests/ -q        # 64 tests
 python - <<'EOF'
 from warehouse import telemetry, views, orchestrator
 conn = telemetry.connect(); views.bootstrap(conn, seed=42)
@@ -139,13 +143,20 @@ but the domain is different and so is the engineering:
 - **Carrier ETA signal** instead of weather/demand: fake/live backends with
   explicit gap behavior.
 
+**Boundary with the cold-chain repo.** Cold-chain works *between* sites:
+reefer trucks in transit, temperature breaches, port diversions. This repo
+works *inside one building*: where each SKU sits, how orders are batched into
+pick waves, and whether a shift's labor fits the plan. A cold-chain shipment
+ends where this repo's receiving SOP begins; neither repo reads the other's data.
+
 ## Guardrails and security controls
 
-- SELECT-only gateway over four views; denials cite `SEC-SELECT-01/02/03`;
+- SELECT-only gateway over four views; denials cite `SEC-SELECT-01`, `SEC-WRITE-02`, `SEC-VIEW-03`;
+  a SQLite authorizer enforces the view allowlist (ADR 0001);
   string literals stripped before scanning (no false positives).
 - Reslot plans above 8 labor-hours and **every** wave release need a human
   confirmation token.
-- Feedback free text is PII-redacted (emails, 10+ digit numbers) before it
+- Feedback free text is PII-redacted (emails, SSN-shaped and 10+ digit numbers) before it
   enters the append-only audit chain; over-length corrections rejected.
 - Tamper-evident audit: `verify_chain()` fails on any alteration (tested).
 - Threat model: [`docs/threat-model.md`](docs/threat-model.md).
@@ -181,12 +192,42 @@ but the domain is different and so is the engineering:
 | `warehouse/demo_helpers.py` | Stdlib demo logic (tested) |
 | `demo/app.py` | Thin Streamlit UI (lazy import) |
 
+## Standardization review (2026-10-18)
+
+Reviewed against the portfolio standard after the build. Bugs found and fixed, each now pinned by a test:
+
+1. **Slotting optimizer recommended moves that could not happen.** Every slot holds a SKU, so Z-GOLD had no free slot, yet the optimizer sent SKU-FAST-01 there without checking capacity, and the dead stock (SKU-DEAD-07) taking the golden slot was never addressed. It now uses a free slot when one exists, otherwise swaps the fast mover with the slowest over-slotted SKU in that rank and nets the slow SKU's extra travel out of the saving (15,120 m/day gross becomes 15,052.8 net, 1.0 labor-hour for two moves). With no room and no swap partner, nothing is recommended.
+2. **Waves were numbered zone-first.** `plan_waves` sorted by (zone, priority), so a P3 wave in zone A came before a P1 wave in zone B. Waves are now ordered priority-first.
+3. **Feedback redaction missed SSNs.** The digit-run pattern needs 10+ digits, so `123-45-6789` (9) stayed in the log. An SSN pattern was added.
+4. **Gateway allowlist bypass.** `check()` only looked at names written right after `FROM`/`JOIN` and whitespace, so a comma join (`FROM v_x, base_table`), a double-quoted name (`JOIN "sqlite_master"`) or a comment in place of the space (`FROM/**/base_table`) read base tables and the schema. A SQLite authorizer now refuses every read that is not an allowlisted view or done on a view's behalf (`authz.py`, ADR 0001); `/* */` comments are stripped before scanning; the 100-row cap is enforced at fetch time.
+
+Differentiator on the seeded data (regenerated and checked by CI on every push):
+
+<!-- run: python scripts/show_differentiator.py -->
+```text
+swap: SKU-FAST-01 Z-BACK -> Z-GOLD swap_with=SKU-DEAD-07 net 15052.8 m/day, 1.0 labor-h
+{'moves': 1, 'total_saving_m_per_day': 15052.8, 'total_labor_hours': 1.0, 'requires_gate': False}
+PLAN-W001 P1 Z-GOLD orders=['O-2'] units=200 over_capacity=False
+PLAN-W002 P1 Z-GOLD orders=['O-3'] units=90 over_capacity=False
+PLAN-W003 P2 Z-BACK orders=['O-4'] units=300 over_capacity=True
+PLAN-W004 P3 Z-MID orders=['O-1'] units=120 over_capacity=False
+```
+<!-- /run -->
+
+Test count (also checked by CI):
+
+<!-- run: python scripts/count_tests.py -->
+```text
+64 tests collected
+```
+<!-- /run -->
+
 ## Built / Written-not-run / Planned
 
 | Status | Item |
 |---|---|
-| Built | Telemetry, views+gateway, 5 intents, SOP RAG, slotting optimizer, wave planner, carrier fake/live, orchestrator, tiers+gates, audit, PII-redacted feedback, Streamlit demo, 52 tests |
-| Written, not run | `.github/workflows/ci.yml` (present locally; GitHub Actions run happens after push) |
+| Built | Telemetry, views+gateway, 5 intents, SOP RAG, slotting optimizer, wave planner, carrier fake/live, orchestrator, tiers+gates, audit, PII-redacted feedback, Streamlit demo, 64 tests |
+| Built | CI on every push: ruff, tests, docs drift check, hashed brand check, gitleaks; CodeQL; Dependabot |
 | Planned | Live carrier feed wiring, weekly optimizer batch job, persisted confirmation gates, feedback-to-golden-case mining |
 
 ## Related repos

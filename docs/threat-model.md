@@ -14,7 +14,7 @@ Lightweight STRIDE-style review for the warehouse operations agent.
 | 1 | Prompt injection smuggles SQL writes (spoofing the planner's intent) | Gateway enforces SELECT-only with cited rule IDs; literals stripped before scanning; identifier allowlist limited to 4 views |
 | 2 | Tampering with audit history to hide a bad release | SHA-256 hash chain; `verify_chain()` fails on any alteration (tested) |
 | 3 | Hallucinated carrier ETA drives a bad labor plan | Live backend degrades to an explicit gap; planner reports the gap |
-| 4 | PII in feedback corrections persists in the append-only log | `redact_correction()` replaces emails and 10+ digit numbers before write; over-length corrections rejected |
+| 4 | PII in feedback corrections persists in the append-only log | `redact_correction()` replaces emails, SSN-shaped numbers and 10+ digit numbers before write; over-length corrections rejected |
 | 5 | Over-capacity wave released without oversight | Every wave release mints a confirmation gate; over-capacity waves escalate to T3/T4 |
 | 6 | Runaway reslot plan churns the night shift | Plans above 8 labor-hours need a confirmation gate; optimizer output is advisory until approved |
 | 7 | Stale velocity classes mis-slot the building | Documented limitation: classes are static in the synthetic data; production must re-derive from pick history (see implementation guide) |

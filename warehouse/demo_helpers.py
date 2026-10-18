@@ -68,8 +68,9 @@ def format_reslot_plan(recommendations, summary):
     ]
     for r in recommendations[:10]:
         lines.append(
-            f"  - {r['sku']} ({r['sku_name']}): {r['from_zone']} -> {r['to_zone']}, "
-            f"saves {r['saving_m_per_day']:,.0f} m/day"
+            f"  - {r['sku']} ({r['sku_name']}): {r['from_zone']} -> {r['to_zone']}"
+            + (f" (swap with {r['swap_with']})" if r.get("swap_with") else "")
+            + f", saves {r['saving_m_per_day']:,.0f} m/day net"
         )
     if len(recommendations) > 10:
         lines.append(f"  ... and {len(recommendations) - 10} more")

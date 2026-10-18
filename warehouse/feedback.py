@@ -18,12 +18,13 @@ RATINGS = ("up", "down")
 MAX_CORRECTION_CHARS = 2000
 _PII = [
     (re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+"), "[EMAIL]"),
+    (re.compile(r"\b\d{3}-\d{2}-\d{4}\b"), "[SSN]"),
     (re.compile(r"(?:\+?\d[\s().-]?){9,19}\d"), "[NUMBER]"),
 ]
 
 
 def redact_correction(text):
-    """Replace emails and 10+ digit numbers; returns (text, count)."""
+    """Replace emails, SSN-shaped numbers and 10+ digit numbers; returns (text, count)."""
     count = 0
     for pattern, placeholder in _PII:
         text, n = pattern.subn(placeholder, text)

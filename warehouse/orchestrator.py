@@ -13,10 +13,7 @@ import re
 from . import audit as audit_mod
 from . import carrier as carrier_mod
 from . import replenishment as repl
-from . import slotting
-from . import sop_rag
-from . import text2sql
-from . import waves
+from . import slotting, sop_rag, text2sql
 
 _RESLOT_RE = re.compile(r"\bre[-\s]?slot\b|reassign (slot|zone)|move sku", re.I)
 _RELEASE_WAVE_RE = re.compile(r"release (the )?wave|release wave", re.I)
@@ -173,8 +170,9 @@ class PlannerAgent:
                 top = recs[0]
                 lines.append(
                     f"Top move: {top['sku_name']} {top['from_zone']} -> "
-                    f"{top['to_zone']} saves "
-                    f"{top['saving_m_per_day']:,.0f} m/day."
+                    f"{top['to_zone']}"
+                    + (f" (swap with {top['swap_with']})" if top.get("swap_with") else "")
+                    + f" saves {top['saving_m_per_day']:,.0f} m/day net."
                 )
         if sop_answer["found"]:
             lines.append(sop_answer["message"])

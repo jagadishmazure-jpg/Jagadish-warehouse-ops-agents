@@ -9,7 +9,7 @@ flowchart LR
     P --> S[SopIndex\nTF-IDF over 4 SOPs]
     P --> C[Carrier signal\nfake / live]
     P --> SL[Slotting optimizer\nABC-velocity moves]
-    T --> G[SELECT-only gateway\nSEC-SELECT-01/02/03]
+    T --> G[SELECT-only gateway\nSEC-SELECT-01 / SEC-WRITE-02 / SEC-VIEW-03\n+ SQLite authorizer]
     G --> V[(4 read-only views\nSQLite telemetry)]
     SL --> V
     P --> RP[Escalation tiers T1-T4\n+ confirmation gates]

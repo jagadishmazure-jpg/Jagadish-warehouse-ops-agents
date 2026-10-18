@@ -197,8 +197,10 @@ def test_optimizer_recommends_fast_mover_forward(conn):
     assert top["sku"] == "SKU-FAST-01"
     assert top["from_zone"] == "Z-BACK"
     assert top["to_zone"] == "Z-GOLD"
-    # 45 picks/day * (180 - 12) m * 2 (round trip)
-    assert top["saving_m_per_day"] == 45.0 * (180.0 - 12.0) * 2.0
+    # Z-GOLD has no free slot, so the fast mover swaps with the dead stock:
+    # 45 * (180 - 12) * 2 saved, minus 0.2 * (180 - 12) * 2 added for SKU-DEAD-07.
+    assert top["move_type"] == "swap" and top["swap_with"] == "SKU-DEAD-07"
+    assert top["saving_m_per_day"] == round((45.0 - 0.2) * (180.0 - 12.0) * 2.0, 1)
 
 
 def test_optimizer_skips_move_that_increases_travel(conn):
@@ -212,8 +214,8 @@ def test_plan_summary_totals(conn):
     recs = slotting.recommend_moves(conn)
     summary = slotting.plan_summary(recs)
     assert summary["moves"] == 1
-    assert summary["total_saving_m_per_day"] == 15120.0
-    assert summary["total_labor_hours"] == 0.5
+    assert summary["total_saving_m_per_day"] == 15052.8
+    assert summary["total_labor_hours"] == 1.0
     assert summary["requires_gate"] is False
 
 
@@ -476,4 +478,30 @@ def test_format_reslot_plan(conn):
     summary = slotting.plan_summary(recs)
     text = demo_helpers.format_reslot_plan(recs, summary)
     assert "SKU-FAST-01" in text
-    assert "15,120" in text
+    assert "15,053" in text and "swap with SKU-DEAD-07" in text
+
+
+# ---------- review fixes (grokbot-portfolio, 2026-10-18) ----------
+
+def test_move_into_free_slot_needs_no_swap(conn):
+    conn.execute("INSERT INTO slots VALUES ('SLOT-FREE', 'Z-GOLD', NULL, 500)")
+    top = slotting.recommend_moves(conn)[0]
+    assert top["move_type"] == "move" and top["swap_with"] is None
+    assert top["saving_m_per_day"] == 45.0 * (180.0 - 12.0) * 2.0
+
+
+def test_no_room_and_no_partner_means_no_recommendation(conn):
+    conn.execute("DELETE FROM slots WHERE sku = 'SKU-DEAD-07'")
+    assert slotting.recommend_moves(conn) == []
+
+
+def test_waves_are_numbered_priority_first():
+    orders = [_order("O1", "Z-A", "P3", 10), _order("O2", "Z-B", "P1", 10)]
+    planned = waves.plan_waves(orders)
+    assert [w["priority"] for w in planned] == ["P1", "P3"]
+
+
+def test_feedback_redacts_ssn():
+    from warehouse.feedback import redact_correction
+    text, n = redact_correction("picker SSN 123-45-6789 on the form")
+    assert "123-45-6789" not in text and n == 1

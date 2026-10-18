@@ -13,7 +13,8 @@ the risky actions behind human confirmation."
 ## Architecture decisions
 - **Rule-based planner, not an LLM call**: five governed intents map to
   fixed SELECT templates. Deterministic, testable, and the SQL can never
-  escape the sandbox (gateway rule IDs SEC-SELECT-01/02/03).
+  escape the sandbox (gateway rule IDs SEC-SELECT-01 / SEC-WRITE-02 /
+  SEC-VIEW-03, with a SQLite authorizer behind them, ADR 0001).
 - **Read-only views as the trust boundary**: the planner never sees base
   tables. String literals are stripped before the write-keyword scan so
   quoted values can't false-positive.
